@@ -23,8 +23,14 @@ It also adds two shell aliases:
 ## Quick start
 
 ```bash
-git clone https://github.com/YOUR_USER/jpt.git
-cd jpt
+curl -fsSL https://raw.githubusercontent.com/jiaming-ai/JProductive/master/install.sh | bash
+```
+
+Or clone and run manually:
+
+```bash
+git clone https://github.com/jiaming-ai/JProductive.git
+cd JProductive
 ./install.sh
 ```
 
