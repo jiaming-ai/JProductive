@@ -1,24 +1,27 @@
 #!/bin/bash
 # ct - Connect Tmux: wrapper around auto_fleet.sh
 # Usage:
-#   ct naga majores          - connect to listed servers
-#   ct --save naga majores   - save server list and connect
-#   ct                       - connect using saved server list
+#   ct naga majores            - connect to listed servers
+#   ct --save naga majores     - save server list and connect
+#   ct --new naga majores      - create new sessions on servers with none
+#   ct                         - reattach to last session, or load from saved list
 set -euo pipefail
 
 AF_DIR="$HOME/.auto_fleet"
 SAVED_SERVERS="$AF_DIR/servers"
 SCRIPT="$AF_DIR/auto_fleet.sh"
+LOCAL_SESSION="auto_fleet"
 
-# Parse --save flag
+# Parse flags
 SAVE=0
+NEW=0
 SERVERS=()
 for arg in "$@"; do
-  if [ "$arg" = "--save" ]; then
-    SAVE=1
-  else
-    SERVERS+=("$arg")
-  fi
+  case "$arg" in
+    --save) SAVE=1 ;;
+    -n|--new) NEW=1 ;;
+    *)      SERVERS+=("$arg") ;;
+  esac
 done
 
 # Save server list if requested
@@ -31,16 +34,25 @@ if [ "$SAVE" -eq 1 ]; then
   echo "Saved server list to $SAVED_SERVERS"
 fi
 
-# If no servers given on command line, load from saved file
+# No servers given: try reattaching to existing session, then fall back to saved list
 if [ ${#SERVERS[@]} -eq 0 ]; then
+  if tmux has-session -t "$LOCAL_SESSION" 2>/dev/null; then
+    echo "Reattaching to existing session..."
+    tmux attach -t "$LOCAL_SESSION"
+    exit 0
+  fi
   if [ -f "$SAVED_SERVERS" ]; then
     mapfile -t SERVERS < <(grep -v '^[[:space:]]*$' "$SAVED_SERVERS")
   fi
   if [ ${#SERVERS[@]} -eq 0 ]; then
-    echo "Usage: ct [--save] <server1> [server2] ..."
-    echo "Or run 'ct --save <servers>' first to save a default list."
+    echo "No existing session and no saved server list."
+    echo "Usage: ct [--save] [--new] <server1> [server2] ..."
     exit 1
   fi
 fi
 
-exec bash "$SCRIPT" "${SERVERS[@]}"
+ARGS=()
+[ "$NEW" -eq 1 ] && ARGS+=("--new")
+ARGS+=("${SERVERS[@]}")
+
+exec bash "$SCRIPT" "${ARGS[@]}"

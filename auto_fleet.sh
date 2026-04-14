@@ -2,15 +2,25 @@
 
 LOCAL_SESSION="auto_fleet"
 
+# Parse --new flag
+CREATE_NEW=0
+SERVERS=()
+for arg in "$@"; do
+    case "$arg" in
+        -n|--new) CREATE_NEW=1 ;;
+        *)     SERVERS+=("$arg") ;;
+    esac
+done
+
 # 1. Determine the list of servers (from arguments OR a file)
-if [ $# -gt 0 ]; then
-    # Use arguments if provided (e.g., ./auto_fleet.sh naga majores)
-    SERVERS=("$@")
-elif [ -f "servers.txt" ]; then
-    # Read from servers.txt if it exists (ignoring empty lines)
-    mapfile -t SERVERS < <(grep -S '[^[:space:]]' servers.txt)
-else
-    echo "Usage: $0 <server1> [server2] ..."
+if [ ${#SERVERS[@]} -eq 0 ]; then
+    if [ -f "servers.txt" ]; then
+        mapfile -t SERVERS < <(grep -v '^[[:space:]]*$' servers.txt)
+    fi
+fi
+
+if [ ${#SERVERS[@]} -eq 0 ]; then
+    echo "Usage: $0 [--new] <server1> [server2] ..."
     echo "Or create a 'servers.txt' file in the same directory."
     exit 1
 fi
@@ -38,36 +48,51 @@ FIRST_WINDOW="$(tmux list-windows -t "$LOCAL_SESSION" -F '#{window_index}' | hea
 
 FIRST_WINDOW_CREATED=0
 
+# Helper to create a local window for a remote session
+create_window() {
+    local server="$1" session="$2"
+    local WINDOW_NAME="${server}-${session}"
+    local SSH_CMD="ssh -t $server 'tmux attach -t $session'"
+
+    echo "  -> Found session: $session. Creating tab: $WINDOW_NAME"
+
+    if [ $FIRST_WINDOW_CREATED -eq 0 ]; then
+        tmux rename-window -t "${LOCAL_SESSION}:${FIRST_WINDOW}" "$WINDOW_NAME"
+        tmux send-keys -t "${LOCAL_SESSION}:${FIRST_WINDOW}" "$SSH_CMD" C-m
+        FIRST_WINDOW_CREATED=1
+    else
+        tmux new-window -t "$LOCAL_SESSION" -n "$WINDOW_NAME" "$SSH_CMD"
+    fi
+}
+
 # 3. Iterate through servers and query tmux
 for server in "${SERVERS[@]}"; do
     echo "Checking $server..."
-    
-    # Run 'tmux ls' remotely. 
+
+    # Run 'tmux ls' remotely.
     # -o ConnectTimeout=5 prevents hanging if a server is offline
     # -F '#S' formats the output to return ONLY the session names
     SESSIONS=$(ssh -o ConnectTimeout=5 -o BatchMode=yes "$server" "tmux ls -F '#S'" 2>/dev/null)
 
     if [ -z "$SESSIONS" ]; then
-        echo "  -> No active sessions found (or server unreachable)."
+        if [ "$CREATE_NEW" -eq 1 ]; then
+            # Verify server is reachable before creating a session
+            if ssh -o ConnectTimeout=5 -o BatchMode=yes "$server" "true" 2>/dev/null; then
+                echo "  -> No sessions found. Creating new session on $server..."
+                ssh -o ConnectTimeout=5 -o BatchMode=yes "$server" "tmux new-session -d -s main" 2>/dev/null
+                create_window "$server" "main"
+            else
+                echo "  -> Server unreachable."
+            fi
+        else
+            echo "  -> No active sessions found (or server unreachable)."
+        fi
         continue
     fi
 
     # 4. Create a local tab for EVERY remote session found
     for session in $SESSIONS; do
-        WINDOW_NAME="${server}-${session}"
-        echo "  -> Found session: $session. Creating tab: $WINDOW_NAME"
-
-        SSH_CMD="ssh -t $server 'tmux attach -t $session'"
-
-        if [ $FIRST_WINDOW_CREATED -eq 0 ]; then
-            # Rename the placeholder window and start the SSH connection
-            tmux rename-window -t "${LOCAL_SESSION}:${FIRST_WINDOW}" "$WINDOW_NAME"
-            tmux send-keys -t "${LOCAL_SESSION}:${FIRST_WINDOW}" "$SSH_CMD" C-m
-            FIRST_WINDOW_CREATED=1
-        else
-            # Open a new window for subsequent sessions
-            tmux new-window -t "$LOCAL_SESSION" -n "$WINDOW_NAME" "$SSH_CMD"
-        fi
+        create_window "$server" "$session"
     done
 done
 
