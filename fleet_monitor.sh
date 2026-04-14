@@ -24,7 +24,7 @@ while true; do
         NR==2{for(i=2;i<=NF;i++)t2+=$i; d2=$5}
         END{dt=t2-t1; di=d2-d1; if(dt>0) printf "%.1f", (dt-di)*100/dt; else printf "0.0"}')
 
-    RAM=$(awk '/MemTotal/{t=$2} /MemAvailable/{a=$2} END{u=t-a; printf "%.1f/%.1fG %2.0f%%", u/1048576, t/1048576, u*100/t}' /proc/meminfo)
+    RAM=$(awk '/MemTotal/{t=$2} /MemAvailable/{a=$2} END{u=t-a; printf "%.0f/%.0fG %2.0f%%", u/1048576, t/1048576, u*100/t}' /proc/meminfo)
 
     GPU_DATA=""
     if [ "$HAS_NVIDIA" = "1" ]; then
@@ -38,7 +38,7 @@ while true; do
         printf '\033[H'
         printf '\033[1m%s\033[0m\033[K\n' "$HOST"
         printf 'GPU|UTI|VRAM(G)\033[K\n'
-        [ -n "$GPU_DATA" ] && printf '%s' "$GPU_DATA"
+        [ -n "$GPU_DATA" ] && printf '%s\n' "$GPU_DATA"
         printf 'RAM %s\033[K\n' "$RAM"
         printf 'CPU %s%% %sc\033[K\n' "$CPU" "$CORES"
         printf '\033[J'

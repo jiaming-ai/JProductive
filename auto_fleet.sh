@@ -43,8 +43,12 @@ if tmux has-session -t "$LOCAL_SESSION" 2>/dev/null; then
 fi
 
 echo "Scanning servers for active tmux sessions..."
-# Start a detached local session with a placeholder window
-tmux new-session -d -s "$LOCAL_SESSION" -n "scanning..."
+# Create session sized to the current terminal so -l 20 actually means 20 columns
+# (tmux preserves pane *proportions* on resize, so sizes set in a small default
+# session get scaled up when the client attaches on a wider terminal)
+CLIENT_COLS=$(tput cols 2>/dev/null || echo 200)
+CLIENT_LINES=$(tput lines 2>/dev/null || echo 50)
+tmux new-session -d -s "$LOCAL_SESSION" -n "scanning..." -x "$CLIENT_COLS" -y "$CLIENT_LINES"
 FIRST_WINDOW="$(tmux list-windows -t "$LOCAL_SESSION" -F '#{window_index}' | head -1)"
 
 FIRST_WINDOW_CREATED=0
@@ -66,9 +70,10 @@ create_window() {
         tmux new-window -t "$LOCAL_SESSION" -n "$WINDOW_NAME" "$SSH_CMD"
     fi
 
-    # Add monitor sidebar on the right, then focus back on the SSH pane
+    # Add monitor sidebar on the right, force absolute width, focus back on SSH pane
     tmux split-window -h -l "$SIDEBAR_WIDTH" -t "${LOCAL_SESSION}:${WINDOW_NAME}" \
         "bash '$MONITOR_SCRIPT' '$server'"
+    tmux resize-pane -x "$SIDEBAR_WIDTH" -t "${LOCAL_SESSION}:${WINDOW_NAME}"
     tmux select-pane -L -t "${LOCAL_SESSION}:${WINDOW_NAME}"
 }
 
