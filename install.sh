@@ -121,8 +121,11 @@ install_nvm() {
 
 load_nvm() {
   export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+  # nvm.sh references unset variables internally; suspend nounset while sourcing
   # shellcheck disable=SC1091
+  set +u
   [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+  set -u
 }
 
 install_node() {
@@ -132,9 +135,11 @@ install_node() {
     return
   fi
   info "Installing latest Node.js LTS via nvm..."
+  set +u
   nvm install --lts
   nvm use --lts
   nvm alias default lts/*
+  set -u
   ok "node $(node -v) installed"
 }
 
