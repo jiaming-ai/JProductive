@@ -5,6 +5,20 @@
 # All tools installed as user in local directories.
 set -euo pipefail
 
+REPO_URL="https://github.com/jiaming-ai/JProductive.git"
+CLONE_DIR="$HOME/.JProductive"
+
+# When piped via curl|bash, BASH_SOURCE is unset and the repo files aren't
+# available locally.  Clone the repo first, then re-exec from the clone.
+if [ -z "${BASH_SOURCE[0]:-}" ] || [ "${BASH_SOURCE[0]}" = "bash" ]; then
+  if [ -d "$CLONE_DIR/.git" ]; then
+    git -C "$CLONE_DIR" pull --ff-only -q 2>/dev/null || true
+  else
+    git clone "$REPO_URL" "$CLONE_DIR"
+  fi
+  exec bash "$CLONE_DIR/install.sh" "$@"
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [ ${EUID:-$(id -u)} -eq 0 ]; then
