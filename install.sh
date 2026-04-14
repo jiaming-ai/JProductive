@@ -1,7 +1,7 @@
 #!/bin/bash
 # J-pro-tools installer
 # Single script to set up a productive development environment.
-# Installs: tmux config, vim config, micromamba, uv, nvm, node, codex, claude code
+# Installs: tmux config, vim config, micromamba, uv, nvm, node, codex, claude code, auto_fleet (ct)
 # All tools installed as user in local directories.
 set -euo pipefail
 
@@ -169,7 +169,22 @@ install_claude_code() {
   ok "claude code installed"
 }
 
-# --- 8. Shell aliases ---
+# --- 8. Auto Fleet (ct) ---
+
+install_auto_fleet() {
+  info "Setting up auto_fleet (ct)..."
+
+  AF_DIR="$HOME/.auto_fleet"
+  ensure_dir "$AF_DIR"
+
+  cp -f "$SCRIPT_DIR/auto_fleet.sh" "$AF_DIR/auto_fleet.sh"
+  cp -f "$SCRIPT_DIR/ct" "$AF_DIR/ct"
+  chmod +x "$AF_DIR/auto_fleet.sh" "$AF_DIR/ct"
+
+  ok "auto_fleet installed ($AF_DIR)"
+}
+
+# --- 9. Shell aliases ---
 
 install_aliases() {
   info "Setting up shell aliases..."
@@ -180,6 +195,7 @@ install_aliases() {
   declare -A aliases=(
     ["claudey"]='claude --dangerously-skip-permissions'
     ["codexy"]='codex --yolo'
+    ["ct"]='$HOME/.auto_fleet/ct'
   )
 
   for name in "${!aliases[@]}"; do
@@ -206,6 +222,7 @@ main() {
   install_node
   install_codex
   install_claude_code
+  install_auto_fleet
   install_aliases
 
   printf '\n=== All done! ===\n'

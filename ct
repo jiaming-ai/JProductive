@@ -1,0 +1,46 @@
+#!/bin/bash
+# ct - Connect Tmux: wrapper around auto_fleet.sh
+# Usage:
+#   ct naga majores          - connect to listed servers
+#   ct --save naga majores   - save server list and connect
+#   ct                       - connect using saved server list
+set -euo pipefail
+
+AF_DIR="$HOME/.auto_fleet"
+SAVED_SERVERS="$AF_DIR/servers"
+SCRIPT="$AF_DIR/auto_fleet.sh"
+
+# Parse --save flag
+SAVE=0
+SERVERS=()
+for arg in "$@"; do
+  if [ "$arg" = "--save" ]; then
+    SAVE=1
+  else
+    SERVERS+=("$arg")
+  fi
+done
+
+# Save server list if requested
+if [ "$SAVE" -eq 1 ]; then
+  if [ ${#SERVERS[@]} -eq 0 ]; then
+    echo "Error: --save requires at least one server name." >&2
+    exit 1
+  fi
+  printf '%s\n' "${SERVERS[@]}" > "$SAVED_SERVERS"
+  echo "Saved server list to $SAVED_SERVERS"
+fi
+
+# If no servers given on command line, load from saved file
+if [ ${#SERVERS[@]} -eq 0 ]; then
+  if [ -f "$SAVED_SERVERS" ]; then
+    mapfile -t SERVERS < <(grep -v '^[[:space:]]*$' "$SAVED_SERVERS")
+  fi
+  if [ ${#SERVERS[@]} -eq 0 ]; then
+    echo "Usage: ct [--save] <server1> [server2] ..."
+    echo "Or run 'ct --save <servers>' first to save a default list."
+    exit 1
+  fi
+fi
+
+exec bash "$SCRIPT" "${SERVERS[@]}"
