@@ -1,6 +1,7 @@
 #!/bin/bash
 
 LOCAL_SESSION="auto_fleet"
+MONITOR_SCRIPT="$HOME/.auto_fleet/fleet_monitor.sh"
 
 # Parse --new flag
 CREATE_NEW=0
@@ -28,7 +29,8 @@ fi
 # 2. Check if local session already exists
 if tmux has-session -t "$LOCAL_SESSION" 2>/dev/null; then
     # Extract server names from existing window names (format: server-session)
-    EXISTING_SERVERS=$(tmux list-windows -t "$LOCAL_SESSION" -F '#{window_name}' | sed 's/-[^-]*$//' | sort -u)
+    # Exclude the "monitor" window from the comparison
+    EXISTING_SERVERS=$(tmux list-windows -t "$LOCAL_SESSION" -F '#{window_name}' | grep -v '^monitor$' | sed 's/-[^-]*$//' | sort -u)
     REQUESTED_SERVERS=$(printf '%s\n' "${SERVERS[@]}" | sort -u)
 
     if [ "$EXISTING_SERVERS" = "$REQUESTED_SERVERS" ]; then
@@ -47,6 +49,7 @@ tmux new-session -d -s "$LOCAL_SESSION" -n "scanning..."
 FIRST_WINDOW="$(tmux list-windows -t "$LOCAL_SESSION" -F '#{window_index}' | head -1)"
 
 FIRST_WINDOW_CREATED=0
+CONNECTED_SERVERS=()
 
 # Helper to create a local window for a remote session
 create_window() {
@@ -81,6 +84,7 @@ for server in "${SERVERS[@]}"; do
                 echo "  -> No sessions found. Creating new session on $server..."
                 ssh -o ConnectTimeout=5 -o BatchMode=yes "$server" "tmux new-session -d -s main" 2>/dev/null
                 create_window "$server" "main"
+                CONNECTED_SERVERS+=("$server")
             else
                 echo "  -> Server unreachable."
             fi
@@ -90,13 +94,31 @@ for server in "${SERVERS[@]}"; do
         continue
     fi
 
+    CONNECTED_SERVERS+=("$server")
+
     # 4. Create a local tab for EVERY remote session found
     for session in $SESSIONS; do
         create_window "$server" "$session"
     done
 done
 
-# 5. Final check
+# 5. Create monitor window with a pane per connected server
+if [ ${#CONNECTED_SERVERS[@]} -gt 0 ]; then
+    # Deduplicate servers (a server with multiple sessions appears once)
+    UNIQUE_SERVERS=($(printf '%s\n' "${CONNECTED_SERVERS[@]}" | sort -u))
+
+    tmux new-window -t "$LOCAL_SESSION" -n "monitor" "bash '$MONITOR_SCRIPT' '${UNIQUE_SERVERS[0]}'"
+
+    for ((i=1; i<${#UNIQUE_SERVERS[@]}; i++)); do
+        tmux split-window -t "${LOCAL_SESSION}:monitor" "bash '$MONITOR_SCRIPT' '${UNIQUE_SERVERS[$i]}'"
+        tmux select-layout -t "${LOCAL_SESSION}:monitor" tiled
+    done
+
+    # Switch back to the first server window
+    tmux select-window -t "${LOCAL_SESSION}:${FIRST_WINDOW}"
+fi
+
+# 6. Final check
 if [ $FIRST_WINDOW_CREATED -eq 0 ]; then
     echo "No tmux sessions found on any provided servers."
     tmux kill-session -t "$LOCAL_SESSION"
