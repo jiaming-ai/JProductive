@@ -16,11 +16,19 @@ else
 fi
 
 # 2. Check if local session already exists
-tmux has-session -t "$LOCAL_SESSION" 2>/dev/null
-if [ $? -eq 0 ]; then
-    echo "Local session '$LOCAL_SESSION' already exists. Attaching..."
-    tmux attach -t "$LOCAL_SESSION"
-    exit 0
+if tmux has-session -t "$LOCAL_SESSION" 2>/dev/null; then
+    # Extract server names from existing window names (format: server-session)
+    EXISTING_SERVERS=$(tmux list-windows -t "$LOCAL_SESSION" -F '#{window_name}' | sed 's/-[^-]*$//' | sort -u)
+    REQUESTED_SERVERS=$(printf '%s\n' "${SERVERS[@]}" | sort -u)
+
+    if [ "$EXISTING_SERVERS" = "$REQUESTED_SERVERS" ]; then
+        echo "Local session '$LOCAL_SESSION' already exists. Attaching..."
+        tmux attach -t "$LOCAL_SESSION"
+        exit 0
+    else
+        echo "Server list changed. Restarting session..."
+        tmux kill-session -t "$LOCAL_SESSION"
+    fi
 fi
 
 echo "Scanning servers for active tmux sessions..."
