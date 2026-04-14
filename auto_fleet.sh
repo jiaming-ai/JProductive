@@ -26,6 +26,7 @@ fi
 echo "Scanning servers for active tmux sessions..."
 # Start a detached local session with a placeholder window
 tmux new-session -d -s "$LOCAL_SESSION" -n "scanning..."
+FIRST_WINDOW="$(tmux list-windows -t "$LOCAL_SESSION" -F '#{window_index}' | head -1)"
 
 FIRST_WINDOW_CREATED=0
 
@@ -52,8 +53,8 @@ for server in "${SERVERS[@]}"; do
 
         if [ $FIRST_WINDOW_CREATED -eq 0 ]; then
             # Rename the placeholder window and start the SSH connection
-            tmux rename-window -t "${LOCAL_SESSION}:0" "$WINDOW_NAME"
-            tmux send-keys -t "${LOCAL_SESSION}:0" "$SSH_CMD" C-m
+            tmux rename-window -t "${LOCAL_SESSION}:${FIRST_WINDOW}" "$WINDOW_NAME"
+            tmux send-keys -t "${LOCAL_SESSION}:${FIRST_WINDOW}" "$SSH_CMD" C-m
             FIRST_WINDOW_CREATED=1
         else
             # Open a new window for subsequent sessions
