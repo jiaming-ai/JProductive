@@ -66,15 +66,14 @@ else
     rm -rf ~/.JProductive
     git clone --depth 1 https://github.com/jiaming-ai/JProductive.git ~/.JProductive || echo "git clone failed"
 fi
-# tmux config (respect XDG if ~/.config exists)
-if [ -d "${XDG_CONFIG_HOME:-$HOME/.config}" ]; then
-    mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/tmux"
-    TC="${XDG_CONFIG_HOME:-$HOME/.config}/tmux/tmux.conf"
-else
-    TC="$HOME/.tmux.conf"
-fi
-ln -sfn ~/.JProductive/.tmux.conf "$TC"
-cp -f ~/.JProductive/.tmux.conf.local "$TC.local"
+# Tmux reads ~/.tmux.conf first; only if absent does it fall back to the XDG
+# path.  To avoid ambiguity we deploy to ~/.tmux.conf (the dominant path) and
+# actively remove any XDG tmux.conf so there is ONE authoritative file.
+rm -f "$HOME/.tmux.conf" "$HOME/.tmux.conf.local"
+rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/tmux/tmux.conf" \
+      "${XDG_CONFIG_HOME:-$HOME/.config}/tmux/tmux.conf.local"
+ln -sfn ~/.JProductive/.tmux.conf       "$HOME/.tmux.conf"
+cp   -f ~/.JProductive/.tmux.conf.local "$HOME/.tmux.conf.local"
 # auto_fleet helper scripts
 mkdir -p ~/.auto_fleet
 for f in auto_fleet.sh fleet_monitor.sh ct_split.sh ct; do
@@ -84,7 +83,9 @@ for f in auto_fleet.sh fleet_monitor.sh ct_split.sh ct; do
     fi
 done
 # Reload config in running tmux server so the change applies NOW
-tmux source-file "$TC" 2>/dev/null && echo "config reloaded in tmux server" || echo "no running tmux server (will apply on next start)"
+tmux source-file "$HOME/.tmux.conf" 2>/dev/null \
+    && echo "config reloaded in tmux server (mouse=$(tmux show-options -gv mouse 2>/dev/null))" \
+    || echo "no running tmux server (will apply on next start)"
 echo "=== sync done ==="
 '
 if [ "${CT_DO_REMOTE_SYNC:-0}" = "1" ]; then
