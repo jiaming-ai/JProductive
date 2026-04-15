@@ -180,7 +180,8 @@ install_auto_fleet() {
   cp -f "$SCRIPT_DIR/auto_fleet.sh" "$AF_DIR/auto_fleet.sh"
   cp -f "$SCRIPT_DIR/ct" "$AF_DIR/ct"
   cp -f "$SCRIPT_DIR/fleet_monitor.sh" "$AF_DIR/fleet_monitor.sh"
-  chmod +x "$AF_DIR/auto_fleet.sh" "$AF_DIR/ct" "$AF_DIR/fleet_monitor.sh"
+  cp -f "$SCRIPT_DIR/ct_split.sh" "$AF_DIR/ct_split.sh"
+  chmod +x "$AF_DIR/auto_fleet.sh" "$AF_DIR/ct" "$AF_DIR/fleet_monitor.sh" "$AF_DIR/ct_split.sh"
 
   ok "auto_fleet installed ($AF_DIR)"
 }

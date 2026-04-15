@@ -401,9 +401,9 @@ bind -T copy-mode-vi y send -X copy-selection-and-cancel
 # OSC 52 clipboard (no xclip needed)
 set -g set-clipboard on
 
-# Split panes with | and -
-bind | split-window -h -c "#{pane_current_path}"
-bind - split-window -v -c "#{pane_current_path}"
+# Split panes with | and - (remote split if in a ct server window, else local)
+bind | run-shell "~/.auto_fleet/ct_split.sh h '#{window_name}' '#{pane_current_path}'"
+bind - run-shell "~/.auto_fleet/ct_split.sh v '#{window_name}' '#{pane_current_path}'"
 
 # New window keeps current directory
 bind c new-window -c "#{pane_current_path}"

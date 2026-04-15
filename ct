@@ -30,7 +30,7 @@ done
 # Self-update the ct toolkit from the repo (silent; best effort)
 if [ "$NO_UPDATE" -eq 0 ] && [ -z "${CT_RESTARTED:-}" ] && [ -d "$REPO_DIR/.git" ]; then
   if git -C "$REPO_DIR" pull --ff-only -q 2>/dev/null; then
-    for f in auto_fleet.sh fleet_monitor.sh ct; do
+    for f in auto_fleet.sh fleet_monitor.sh ct_split.sh ct; do
       if [ -f "$REPO_DIR/$f" ] && ! cmp -s "$REPO_DIR/$f" "$AF_DIR/$f" 2>/dev/null; then
         cp -f "$REPO_DIR/$f" "$AF_DIR/$f"
         chmod +x "$AF_DIR/$f"

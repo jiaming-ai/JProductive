@@ -53,6 +53,8 @@ FIRST_WINDOW="$(tmux list-windows -t "$LOCAL_SESSION" -F '#{window_index}' | hea
 
 FIRST_WINDOW_CREATED=0
 SIDEBAR_WIDTH=20
+CONNECTED_SERVERS=()
+CURRENT_SERVERS_FILE="$HOME/.auto_fleet/current_servers"
 
 # Helper to create a local window for a remote session (with monitor sidebar)
 create_window() {
@@ -93,6 +95,7 @@ for server in "${SERVERS[@]}"; do
                 echo "  -> No sessions found. Creating new session on $server..."
                 ssh -o ConnectTimeout=5 -o BatchMode=yes "$server" "tmux new-session -d -s main" 2>/dev/null
                 create_window "$server" "main"
+                CONNECTED_SERVERS+=("$server")
             else
                 echo "  -> Server unreachable."
             fi
@@ -102,11 +105,18 @@ for server in "${SERVERS[@]}"; do
         continue
     fi
 
+    CONNECTED_SERVERS+=("$server")
+
     # 4. Create a local tab for EVERY remote session found
     for session in $SESSIONS; do
         create_window "$server" "$session"
     done
 done
+
+# Persist list of connected servers so ct_split.sh can recognize server windows
+if [ ${#CONNECTED_SERVERS[@]} -gt 0 ]; then
+    printf '%s\n' "${CONNECTED_SERVERS[@]}" | sort -u > "$CURRENT_SERVERS_FILE"
+fi
 
 # 5. Final check
 if [ $FIRST_WINDOW_CREATED -eq 0 ]; then
