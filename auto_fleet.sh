@@ -26,6 +26,12 @@ if [ ${#SERVERS[@]} -eq 0 ]; then
     exit 1
 fi
 
+# Always re-source local tmux config so binding updates from `git pull` take
+# effect, even when we just reattach to an existing session.
+LOCAL_TMUX_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/tmux/tmux.conf"
+[ -f "$LOCAL_TMUX_CONF" ] || LOCAL_TMUX_CONF="$HOME/.tmux.conf"
+tmux source-file "$LOCAL_TMUX_CONF" 2>/dev/null || true
+
 # 2. Check if local session already exists
 if tmux has-session -t "$LOCAL_SESSION" 2>/dev/null; then
     # Extract server names from existing window names (format: server-session)
