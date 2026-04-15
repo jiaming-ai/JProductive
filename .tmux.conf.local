@@ -405,6 +405,19 @@ set -g set-clipboard on
 bind | run-shell "~/.auto_fleet/ct_split.sh h '#{window_name}' '#{pane_current_path}'"
 bind - run-shell "~/.auto_fleet/ct_split.sh v '#{window_name}' '#{pane_current_path}'"
 
+# Right-click pane menu with smart-split (remote split in ct server windows)
+bind -n MouseDown3Pane display-menu -T "#[align=centre] Pane #{pane_index} " -x M -y M \
+    "Split Horizontal |" h "run-shell '~/.auto_fleet/ct_split.sh h \"#{window_name}\" \"#{pane_current_path}\"'" \
+    "Split Vertical -"   v "run-shell '~/.auto_fleet/ct_split.sh v \"#{window_name}\" \"#{pane_current_path}\"'" \
+    "" \
+    "Swap Up"            u "swap-pane -U" \
+    "Swap Down"          d "swap-pane -D" \
+    "" \
+    "Kill Pane"          X "kill-pane" \
+    "Respawn Pane"       R "respawn-pane -k" \
+    "" \
+    "Close Menu"         q ""
+
 # New window keeps current directory
 bind c new-window -c "#{pane_current_path}"
 

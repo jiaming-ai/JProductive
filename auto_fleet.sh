@@ -52,7 +52,10 @@ tmux new-session -d -s "$LOCAL_SESSION" -n "scanning..." -x "$CLIENT_COLS" -y "$
 FIRST_WINDOW="$(tmux list-windows -t "$LOCAL_SESSION" -F '#{window_index}' | head -1)"
 
 FIRST_WINDOW_CREATED=0
-SIDEBAR_WIDTH=20
+# Sidebar width sized to the widest line the monitor can emit:
+#   RAM line: "RAM 9999/9999 99%" = 17
+#   CPU line: "CPU 100% 128/128c" = 17
+SIDEBAR_WIDTH=18
 CONNECTED_SERVERS=()
 CURRENT_SERVERS_FILE="$HOME/.auto_fleet/current_servers"
 
