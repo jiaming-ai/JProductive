@@ -5,7 +5,11 @@
 #   ct --save naga majores     - save server list and connect
 #   ct --new naga majores      - create new sessions on servers with none
 #   ct -r|--reload [...]       - kill local session, reload tmux config, reconnect
+#   ct -u|--upgrade [...]      - force remote config sync on all servers
 #   ct                         - reattach to last session, or load from saved list
+#
+# Remote config is normally pushed only when `git pull` detects local updates
+# (or when -u is passed).  Nothing happens on the remote otherwise.
 set -euo pipefail
 
 AF_DIR="$HOME/.auto_fleet"
@@ -19,20 +23,20 @@ SAVE=0
 NEW=0
 RELOAD=0
 NO_UPDATE=0
-NO_REMOTE=0
+UPGRADE=0
 SERVERS=()
 for arg in "$@"; do
   case "$arg" in
     --save) SAVE=1 ;;
     -n|--new) NEW=1 ;;
     -r|--reload) RELOAD=1 ;;
+    -u|--upgrade) UPGRADE=1 ;;
     --no-update) NO_UPDATE=1 ;;
-    --no-remote-install) NO_REMOTE=1 ;;
     *)      SERVERS+=("$arg") ;;
   esac
 done
 
-[ "$NO_REMOTE" -eq 1 ] && export CT_NO_REMOTE_INSTALL=1
+[ "$UPGRADE" -eq 1 ] && export CT_DO_REMOTE_SYNC=1
 
 # Reload: kill local session, re-source tmux config so new bindings apply
 if [ "$RELOAD" -eq 1 ]; then
@@ -48,9 +52,16 @@ if [ "$RELOAD" -eq 1 ]; then
   fi
 fi
 
-# Self-update the ct toolkit from the repo (silent; best effort)
+# Self-update the ct toolkit from the repo (silent; best effort).
+# If git pull advances HEAD, trigger remote sync too.
 if [ "$NO_UPDATE" -eq 0 ] && [ -z "${CT_RESTARTED:-}" ] && [ -d "$REPO_DIR/.git" ]; then
+  OLD_HEAD=$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || echo "")
   if git -C "$REPO_DIR" pull --ff-only -q 2>/dev/null; then
+    NEW_HEAD=$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || echo "")
+    if [ -n "$OLD_HEAD" ] && [ "$OLD_HEAD" != "$NEW_HEAD" ]; then
+      echo "Local tools updated: ${OLD_HEAD:0:7} -> ${NEW_HEAD:0:7}"
+      export CT_DO_REMOTE_SYNC=1
+    fi
     for f in auto_fleet.sh fleet_monitor.sh ct_split.sh ct; do
       if [ -f "$REPO_DIR/$f" ] && ! cmp -s "$REPO_DIR/$f" "$AF_DIR/$f" 2>/dev/null; then
         cp -f "$REPO_DIR/$f" "$AF_DIR/$f"

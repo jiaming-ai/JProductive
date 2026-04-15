@@ -48,29 +48,61 @@ if tmux has-session -t "$LOCAL_SESSION" 2>/dev/null; then
     fi
 fi
 
-# Fire off the install/update script on each server in the background so tools
-# and tmux config stay in sync. The install script is idempotent and fast on
-# subsequent runs (just git pull + copy scripts). First-time install is heavier
-# but only pays the cost once per server. Output suppressed; failures ignored.
-# Also re-sources the server's tmux config so any existing tmux session picks
-# up new bindings without needing a restart.
-remote_install_oneliner='
+# Push the JProductive tmux config + auto_fleet scripts to each server so
+# nested-tmux features (mouse pass-through, bindings) work consistently.
+# Light-weight: just git pull + symlink/cp + source-file.  No heavy tool
+# installs (nvm/micromamba/etc) -- those are the user's call via the full
+# install script.  Runs in parallel across servers.  Logs to /tmp for
+# debugging when something goes wrong.
+remote_sync_oneliner='
+set -e
+LOG=/tmp/ct_remote_sync.log
+exec >>"$LOG" 2>&1
+echo "=== $(date -Is) sync start on $(hostname) ==="
+mkdir -p ~/.JProductive
 if [ -d ~/.JProductive/.git ]; then
-  cd ~/.JProductive && git pull --ff-only -q 2>/dev/null
-  bash install.sh >/dev/null 2>&1 || true
+    git -C ~/.JProductive pull --ff-only -q || echo "git pull failed"
 else
-  curl -fsSL https://raw.githubusercontent.com/jiaming-ai/JProductive/master/install.sh | bash >/dev/null 2>&1 || true
+    rm -rf ~/.JProductive
+    git clone --depth 1 https://github.com/jiaming-ai/JProductive.git ~/.JProductive || echo "git clone failed"
 fi
-TC="${XDG_CONFIG_HOME:-$HOME/.config}/tmux/tmux.conf"
-[ -f "$TC" ] || TC="$HOME/.tmux.conf"
-tmux source-file "$TC" 2>/dev/null || true
+# tmux config (respect XDG if ~/.config exists)
+if [ -d "${XDG_CONFIG_HOME:-$HOME/.config}" ]; then
+    mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/tmux"
+    TC="${XDG_CONFIG_HOME:-$HOME/.config}/tmux/tmux.conf"
+else
+    TC="$HOME/.tmux.conf"
+fi
+ln -sfn ~/.JProductive/.tmux.conf "$TC"
+cp -f ~/.JProductive/.tmux.conf.local "$TC.local"
+# auto_fleet helper scripts
+mkdir -p ~/.auto_fleet
+for f in auto_fleet.sh fleet_monitor.sh ct_split.sh ct; do
+    if [ -f ~/.JProductive/"$f" ]; then
+        cp -f ~/.JProductive/"$f" ~/.auto_fleet/"$f"
+        chmod +x ~/.auto_fleet/"$f"
+    fi
+done
+# Reload config in running tmux server so the change applies NOW
+tmux source-file "$TC" 2>/dev/null && echo "config reloaded in tmux server" || echo "no running tmux server (will apply on next start)"
+echo "=== sync done ==="
 '
-if [ "${CT_NO_REMOTE_INSTALL:-0}" != "1" ]; then
-    echo "Updating J-pro-tools on each server (background)..."
+if [ "${CT_DO_REMOTE_SYNC:-0}" = "1" ]; then
+    echo "Syncing JProductive config to ${#SERVERS[@]} server(s)..."
+    SYNC_PIDS=()
     for server in "${SERVERS[@]}"; do
-        ssh -o ConnectTimeout=5 -o BatchMode=yes "$server" \
-            "$remote_install_oneliner" </dev/null >/dev/null 2>&1 &
+        (
+            if timeout 30 ssh -o ConnectTimeout=5 -o BatchMode=yes "$server" \
+                "$remote_sync_oneliner" </dev/null >/dev/null 2>&1; then
+                echo "  [+] $server"
+            else
+                echo "  [!] $server (failed; check /tmp/ct_remote_sync.log on host)"
+            fi
+        ) &
+        SYNC_PIDS+=($!)
     done
+    wait "${SYNC_PIDS[@]}" 2>/dev/null
+    echo "Sync complete."
 fi
 
 echo "Scanning servers for active tmux sessions..."
