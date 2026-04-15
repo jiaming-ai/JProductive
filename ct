@@ -4,6 +4,7 @@
 #   ct naga majores            - connect to listed servers
 #   ct --save naga majores     - save server list and connect
 #   ct --new naga majores      - create new sessions on servers with none
+#   ct -r|--reload [...]       - kill local session, reload tmux config, reconnect
 #   ct                         - reattach to last session, or load from saved list
 set -euo pipefail
 
@@ -16,16 +17,32 @@ REPO_DIR="$HOME/.JProductive"
 # Parse flags
 SAVE=0
 NEW=0
+RELOAD=0
 NO_UPDATE=0
 SERVERS=()
 for arg in "$@"; do
   case "$arg" in
     --save) SAVE=1 ;;
     -n|--new) NEW=1 ;;
+    -r|--reload) RELOAD=1 ;;
     --no-update) NO_UPDATE=1 ;;
     *)      SERVERS+=("$arg") ;;
   esac
 done
+
+# Reload: kill local session, re-source tmux config so new bindings apply
+if [ "$RELOAD" -eq 1 ]; then
+  if tmux has-session -t "$LOCAL_SESSION" 2>/dev/null; then
+    echo "Killing existing '$LOCAL_SESSION' session..."
+    tmux kill-session -t "$LOCAL_SESSION"
+  fi
+  # Re-source tmux config in any remaining tmux server so new bindings take effect
+  if tmux list-sessions 2>/dev/null | grep -q .; then
+    TMUX_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/tmux/tmux.conf"
+    [ -f "$TMUX_CONF" ] || TMUX_CONF="$HOME/.tmux.conf"
+    tmux source-file "$TMUX_CONF" 2>/dev/null && echo "Reloaded tmux config."
+  fi
+fi
 
 # Self-update the ct toolkit from the repo (silent; best effort)
 if [ "$NO_UPDATE" -eq 0 ] && [ -z "${CT_RESTARTED:-}" ] && [ -d "$REPO_DIR/.git" ]; then
