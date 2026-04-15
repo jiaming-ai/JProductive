@@ -16,10 +16,30 @@ HOST=$(hostname)
 HAS_NVIDIA=0
 command -v nvidia-smi >/dev/null 2>&1 && HAS_NVIDIA=1
 
+SIDEBAR_WIDTH=18
+PENGUIN_MAX=$((SIDEBAR_WIDTH - 2))   # emoji takes 2 display cols
+FRAME=0
+
 printf '\033[2J\033[H\033[?25l'
 trap 'printf "\033[?25h"' EXIT INT TERM
 
 while true; do
+    # Penguin bounces 0..PENGUIN_MAX back to 0 over 2*PENGUIN_MAX frames.
+    # Every frame renders one position; if SSH hangs/drops, frames stop and
+    # the penguin freezes in place -- a live connection indicator.
+    T=$(( FRAME % (2 * PENGUIN_MAX) ))
+    if [ $T -gt $PENGUIN_MAX ]; then
+        POS=$(( 2 * PENGUIN_MAX - T ))
+    else
+        POS=$T
+    fi
+    FRAME=$(( FRAME + 1 ))
+    LEAD=$(printf "%${POS}s" "")
+    TAIL_W=$(( SIDEBAR_WIDTH - POS - 2 ))
+    [ $TAIL_W -lt 0 ] && TAIL_W=0
+    TAIL=$(printf "%${TAIL_W}s" "")
+    PENGUIN_LINE="${LEAD}🐧${TAIL}"
+
     # --- Sample two readings 1 second apart ---
     CPU1=$(grep '^cpu' /proc/stat)
     DISK1=$(cat /proc/diskstats 2>/dev/null)
@@ -124,6 +144,7 @@ while true; do
         printf '\033[H'
         printf '\033[1;35m🐱 JPro Mon 🐱\033[0m\033[K\n'
         printf '\033[1m%s\033[0m\033[K\n' "$HOST"
+        printf '%s\033[K\n' "$PENGUIN_LINE"
         printf '%s\033[K\n' "$SEP"
         printf 'GPU|UTI|VRAM\033[K\n'
         [ -n "$GPU_DATA" ] && printf '%s\n' "$GPU_DATA"
@@ -140,4 +161,14 @@ done
 ENDSCRIPT
 )
 
-exec ssh -o ConnectTimeout=5 -t "$SERVER" "bash -c $(printf '%q' "$SCRIPT")"
+REMOTE_CMD="bash -c $(printf '%q' "$SCRIPT")"
+while true; do
+    ssh -o ConnectTimeout=5 -o ServerAliveInterval=10 -o ServerAliveCountMax=2 \
+        -t "$SERVER" "$REMOTE_CMD"
+    # SSH exited — show disconnected state, penguin freezes in place
+    printf '\033[?25l'
+    printf '\033[1;31m⚠  DISCONNECTED\033[0m\n'
+    printf 'Retrying in 5s...\n'
+    sleep 5
+done
+

@@ -42,6 +42,31 @@ if tmux has-session -t "$LOCAL_SESSION" 2>/dev/null; then
     fi
 fi
 
+# Fire off the install/update script on each server in the background so tools
+# and tmux config stay in sync. The install script is idempotent and fast on
+# subsequent runs (just git pull + copy scripts). First-time install is heavier
+# but only pays the cost once per server. Output suppressed; failures ignored.
+# Also re-sources the server's tmux config so any existing tmux session picks
+# up new bindings without needing a restart.
+remote_install_oneliner='
+if [ -d ~/.JProductive/.git ]; then
+  cd ~/.JProductive && git pull --ff-only -q 2>/dev/null
+  bash install.sh >/dev/null 2>&1 || true
+else
+  curl -fsSL https://raw.githubusercontent.com/jiaming-ai/JProductive/master/install.sh | bash >/dev/null 2>&1 || true
+fi
+TC="${XDG_CONFIG_HOME:-$HOME/.config}/tmux/tmux.conf"
+[ -f "$TC" ] || TC="$HOME/.tmux.conf"
+tmux source-file "$TC" 2>/dev/null || true
+'
+if [ "${CT_NO_REMOTE_INSTALL:-0}" != "1" ]; then
+    echo "Updating J-pro-tools on each server (background)..."
+    for server in "${SERVERS[@]}"; do
+        ssh -o ConnectTimeout=5 -o BatchMode=yes "$server" \
+            "$remote_install_oneliner" </dev/null >/dev/null 2>&1 &
+    done
+fi
+
 echo "Scanning servers for active tmux sessions..."
 # Create session sized to the current terminal so -l 20 actually means 20 columns
 # (tmux preserves pane *proportions* on resize, so sizes set in a small default

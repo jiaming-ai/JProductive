@@ -19,6 +19,7 @@ SAVE=0
 NEW=0
 RELOAD=0
 NO_UPDATE=0
+NO_REMOTE=0
 SERVERS=()
 for arg in "$@"; do
   case "$arg" in
@@ -26,9 +27,12 @@ for arg in "$@"; do
     -n|--new) NEW=1 ;;
     -r|--reload) RELOAD=1 ;;
     --no-update) NO_UPDATE=1 ;;
+    --no-remote-install) NO_REMOTE=1 ;;
     *)      SERVERS+=("$arg") ;;
   esac
 done
+
+[ "$NO_REMOTE" -eq 1 ] && export CT_NO_REMOTE_INSTALL=1
 
 # Reload: kill local session, re-source tmux config so new bindings apply
 if [ "$RELOAD" -eq 1 ]; then
