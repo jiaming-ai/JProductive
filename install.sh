@@ -115,8 +115,8 @@ install_nvm() {
     return
   fi
   info "Installing nvm..."
-  NVM_LATEST="$(curl -fsSL -o /dev/null -w '%{redirect_url}' https://github.com/nvm-sh/nvm/releases/latest | grep -oP '[^/]+$')"
-  curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_LATEST}/install.sh" | bash
+  NVM_LATEST="$(curl -fsS -o /dev/null -w '%{redirect_url}' https://github.com/nvm-sh/nvm/releases/latest | grep -oP '[^/]+$')"
+  curl -fsSL -o- "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_LATEST}/install.sh" | bash
   ok "nvm installed"
 }
 
