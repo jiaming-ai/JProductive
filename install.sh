@@ -1,7 +1,7 @@
 #!/bin/bash
 # J-pro-tools installer
 # Single script to set up a productive development environment.
-# Installs: tmux config, vim config, micromamba, uv, nvm, node, codex, claude code, auto_fleet (ct)
+# Installs: tmux config, vim config, micromamba, uv, nvm, node, codex, claude code, gh, auto_fleet (ct)
 # All tools installed as user in local directories.
 set -euo pipefail
 
@@ -169,6 +169,64 @@ install_claude_code() {
   ok "claude code installed"
 }
 
+# --- 7b. GitHub CLI + login ---
+
+install_gh() {
+  if command -v gh &>/dev/null; then
+    skip "gh"
+    return
+  fi
+  info "Installing GitHub CLI (gh)..."
+  local arch os tar ver tmp
+  case "$(uname -m)" in
+    x86_64)        arch=amd64 ;;
+    aarch64|arm64) arch=arm64 ;;
+    *) info "Unsupported arch $(uname -m) for gh, skipping"; return ;;
+  esac
+  case "$(uname -s)" in
+    Linux)  os=linux ;;
+    Darwin) os=macOS ;;
+    *) info "Unsupported OS $(uname -s) for gh, skipping"; return ;;
+  esac
+  ver="$(curl -fsS -o /dev/null -w '%{redirect_url}' https://github.com/cli/cli/releases/latest | grep -oP '[^/]+$' | sed 's/^v//')"
+  [ -n "$ver" ] || { info "Could not resolve gh version, skipping"; return; }
+  tar="gh_${ver}_${os}_${arch}.tar.gz"
+  tmp="$(mktemp -d)"
+  curl -fsSL "https://github.com/cli/cli/releases/download/v${ver}/${tar}" | tar -xz -C "$tmp"
+  ensure_dir "$HOME/.local/bin"
+  cp "$tmp/gh_${ver}_${os}_${arch}/bin/gh" "$HOME/.local/bin/gh"
+  chmod +x "$HOME/.local/bin/gh"
+  rm -rf "$tmp"
+  export PATH="$HOME/.local/bin:$PATH"
+  ok "gh installed"
+}
+
+github_login() {
+  if ! command -v gh &>/dev/null; then
+    info "gh not available, skipping GitHub login"
+    return
+  fi
+  if gh auth status &>/dev/null; then
+    skip "github login"
+    return
+  fi
+  if [ ! -c /dev/tty ]; then
+    info "No TTY, skipping GitHub login"
+    return
+  fi
+  printf '[?] Log in to GitHub? (Enter = login via browser URL, ESC = skip) '
+  local key=''
+  IFS= read -rsn1 key < /dev/tty || key=''
+  printf '\n'
+  if [ "$key" = $'\e' ]; then
+    info "Skipped GitHub login"
+    return
+  fi
+  gh auth login --hostname github.com --git-protocol https --web < /dev/tty \
+    && ok "GitHub login complete" \
+    || info "GitHub login failed/cancelled"
+}
+
 # --- 8. Auto Fleet (ct) ---
 
 install_auto_fleet() {
@@ -224,6 +282,8 @@ main() {
   install_node
   install_codex
   install_claude_code
+  install_gh
+  github_login
   install_auto_fleet
   install_aliases
 
